@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-from numba import jit
+# from numba import jit
 
 
-@jit
+# @jit
 def distance(u, v):
     return np.sum((u - v)**2)
 

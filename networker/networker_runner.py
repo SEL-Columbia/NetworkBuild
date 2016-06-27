@@ -87,6 +87,7 @@ class NetworkerRunner(object):
             os.makedirs(self.output_directory)
 
         nio.write_shp(msf, self.output_directory)
+        return msf
 
     def validate(self):
         """
@@ -161,7 +162,7 @@ def build_network(demand_nodes,
         id = int(i+1) if one_based else int(i)
         return id
 
-    msf = None
+    msf = GeoGraph(result_geo_graph.srs)
     if filtered_graph:
         coords = {id_label(i): result_geo_graph.coords[i]
                   for i in filtered_graph}
@@ -171,8 +172,7 @@ def build_network(demand_nodes,
         msf = GeoGraph(result_geo_graph.srs, coords=coords, data=relabeled)
 
     log.info("filtered result has {} nodes and {} edges".format(
-              len(msf.nodes()), len(msf.edges())))
-
+        len(msf.nodes()), len(msf.edges())))
     return msf
 
 
