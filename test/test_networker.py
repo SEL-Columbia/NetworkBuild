@@ -6,6 +6,7 @@ import json
 import numpy as np
 import networkx as nx
 import networker.io as nio
+from networker.exception import SpatialReferenceMismatchException
 from networker import networker_runner
 from networker import geomath as gm
 from networker.algorithms import mod_boruvka
@@ -28,9 +29,9 @@ def networker_run_compare(cfg, known_results_file, output_dir):
     nwk.run()
 
     # compare this run against existing results
-    test_geo = nio.load_shp(os.path.join(output_dir,
+    test_geo = nio.read_shp_geograph(os.path.join(output_dir,
                             "edges.shp"), simplify=False)
-    known_geo = nio.load_shp(known_results_file, simplify=False)
+    known_geo = nio.read_shp_geograph(known_results_file, simplify=False)
 
     # compare sets of edges
     test_edges = get_rounded_edge_sets(test_geo, round_precision=8)
@@ -49,8 +50,8 @@ def test_networker_run():
     """ test on randomly generated set of nodes (demand only) """
 
     run_config = "networker_config_med100.json"
-    results_file = "data/med_100/networks-proposed.shp"
-    output_dir = "data/tmp"
+    results_file = os.path.join("data", "med_100", "networks-proposed.shp")
+    output_dir = os.path.join("data", "tmp")
 
     cfg = get_config(run_config)
     networker_run_compare(cfg, results_file, output_dir)
@@ -62,8 +63,8 @@ def test_networker_leona_run():
     run_config = "networker_config_leona_net.json"
     # TODO:  Determine why this fails with networkplanner_results_file
     # results_file = "data/leona/expected/networks-proposed.shp"
-    results_file = "data/leona/expected/edges.shp"
-    output_dir = "data/tmp"
+    results_file = os.path.join("data", "leona", "expected", "edges.shp")
+    output_dir = os.path.join("data", "tmp")
 
     cfg = get_config(run_config)
     networker_run_compare(cfg, results_file, output_dir)
@@ -91,10 +92,10 @@ def test_srs_mismatch():
     try:
         nwk.run()
     except Exception as e:
-        assert isinstance(e, networker_runner.SRSMismatchException),\
-               "Exception was {}, should be SRSMismatchException".format(e)
+        assert isinstance(e, SpatialReferenceMismatchException),\
+               "Exception was {}, should be SpatialReferenceMismatchException".format(e)
     else:
-        assert False, "SRSMismatchException expected"
+        assert False, "SpatialReferenceMismatchException expected"
 
 
 def random_settlements(n):

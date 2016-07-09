@@ -41,15 +41,15 @@ parser.add_argument("--output_directory", "-o", \
         help="directory where all output files will be written")
 args = parser.parse_args()
 
-nodes = nio.load_nodes(args.node_filename,
-                       args.x_column,
-                       args.y_column)
+nodes = nio.read_csv_geograph(args.node_filename,
+                              args.x_column,
+                              args.y_column)
 
 net = None
 if len(args.network_filename) > 5 and args.network_filename[-5:] == '.json':
-    net = nio.load_json(open(args.network_filename, 'r'))
+    net = nio.read_json_geograph(args.network_filename)
 else:
-    net = nio.load_shp(args.network_filename, simplify=False)
+    net = nio.read_shp_geograph(args.network_filename, simplify=False)
 
 # relabel nodes/coords so that merge can work
 prefix = "net-"

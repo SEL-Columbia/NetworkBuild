@@ -12,7 +12,7 @@ from np.lib import dataset_store, metric, variable_store as VS
 import networker.geomath as gm
 from networker.classes.geograph import GeoGraph
 from networker import networker_runner
-from networker.utils import csv_projection
+import networker.io as nio
 
 log = logging.getLogger('networker')
 
@@ -51,7 +51,7 @@ class NetworkPlannerRunner(object):
         metric_config = json.load(open(
             self.config['metric_model_parameters_file']))
         # read in metrics and setup dataset_store
-        demand_proj = csv_projection(self.config['demand_nodes_file'])
+        demand_proj = nio.read_csv_projection(self.config['demand_nodes_file'])
         target_path = os.path.join(self.output_directory, "dataset.db")
         self.store = dataset_store.create(target_path,
                                           self.config['demand_nodes_file'])
@@ -97,6 +97,10 @@ class NetworkPlannerRunner(object):
         metric_vbobs = self._update_metrics(metric_model, metric_vbobs)
         self._save_output(metric_vbobs, metric_config, metric_model,
                           header_type=header_type)
+        # at this point, dataset_store has all node/network values
+        # so get full geograph and write as geojson
+        full_geograph = dataset_store_to_geograph(self.store)
+        nio.write_geojson(full_geograph, os.path.join(self.output_directory, "networks-proposed.geojson"))
 
     def _run_metric_model(self, metric_model, metric_config):
 
@@ -247,16 +251,29 @@ def dataset_store_to_geograph(dataset_store):
     TODO: determine projection from dataset_store?
     """
 
+
     all_nodes = list(dataset_store.cycleNodes()) + \
         list(dataset_store.cycleNodes(isFake=True))
+    
+    # nodes in output GeoGraph are id'd from 0 to n (via enumerate)
     np_to_nx_id = {node.id: i for i, node in enumerate(all_nodes)}
 
     coords = [node.getCommonCoordinates() for node in all_nodes]
     coords_dict = dict(enumerate(coords))
-    budget_dict = {i: node.metric for i, node in enumerate(all_nodes)}
 
     G = GeoGraph(coords=coords_dict)
-    nx.set_node_attributes(G, 'budget', budget_dict)
+
+    # only set population, system and budget for now
+    # TODO:  Do we need all from the output?
+    for i, node in enumerate(all_nodes):
+        if not node.is_fake:
+            properties = {
+                'budget': node.metric,
+                'population': node.output['demographics']['population count'],
+                'system': node.output['metric']['system']
+            }
+            G.node[i] = properties
+     
 
     def seg_to_nx_ids(seg):
         """

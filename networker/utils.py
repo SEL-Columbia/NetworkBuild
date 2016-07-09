@@ -5,25 +5,46 @@ import numpy as np
 import networkx as nx
 from networkx.readwrite import json_graph
 
-
-# Utility functions
-def csv_projection(path):
+class nested_dict_getter():
     """
-    Get projection from csv file of geo data
-
-    Args:
-        path (str): path to the csv
-
-    Returns:
-        Proj4 projection if included in header else None
+    Class to simplify retrieval of values within 
+    deeply nested dicts without having to write 
+    has_key checks
     """
 
-    with open(path) as raw_text:
-        header = raw_text.readline()
+    def __init__(self, default_value=None):
+        """
+        initialize getter with default_value which
+        is used as a response when keys lead to a path
+        that doesn't exist
+        """
+        self.default_value = default_value
 
-    if 'PROJ.4' in header:
-        return header
+    def __call__(self, d, list_of_paths):
+        """
+        get value or the default by repeated unnesting of
+        dict d through the list_of_paths
 
+        The last element in list_of_paths indicates the element
+        to be returned
+        """
+        if len(list_of_paths) < 1:
+            return self.default_value
+
+        current_dict = d
+        for i in range(len(list_of_paths) - 1):
+            path = list_of_paths[i]
+            if current_dict is not None and current_dict.has_key(path):
+                current_dict = current_dict[path]
+            else:
+                return self.default_value
+
+        last_path = list_of_paths[len(list_of_paths) - 1]
+        if current_dict is not None and current_dict.has_key(last_path):
+            return current_dict[last_path]
+        else:
+            return self.default_value
+        
 
 # GeoGraph to js
 def geograph_to_json(g):

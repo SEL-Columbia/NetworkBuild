@@ -173,12 +173,12 @@ cd <src_dir>
 git clone <repo_name>/networker.git 
 ```
 
-In order to develop/test against the source directory, you'll need to remove networker from the conda environment and
-use setup tools to link you source to the conda environment. 
+In order to develop/test against the source directory, you'll need to install it's dependencies (and remove networker from the conda environment if it alread exists) and use setup tools to link you source to the conda environment. 
 ``` 
 source activate networker
 cd <src_dir>/networker
-conda remove networker
+conda remove networker # if already installed
+conda install -c conda-forge --file requirements.txt
 # links local source directory to python path
 python setup.py develop 
 ```

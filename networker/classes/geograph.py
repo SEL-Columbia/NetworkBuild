@@ -6,6 +6,9 @@ import copy
 import pyproj as prj
 import numpy as np
 from rtree import Rtree
+from itertools import chain
+from collections import deque
+from networker.classes.kdtree import KDTree
 import networker.geomath as gm
 import networker.utils as utils
 
@@ -23,8 +26,11 @@ class GeoObject(object):
         srs:  spatial reference system for the coords
             In proj4 string format (http://trac.osgeo.org/proj/)
         coords:  The coordinates of this object
-            This may be a vector or a collection of vectors depending
-            on the object type
+            Abstractly, this may be a vector or a collection of vectors 
+            depending on the object type
+
+            NOTE:  coords are deep copied in attempt to avoid shared
+            mutability issues
 
     NOTE:  Because coordinates can be set independent of the srs, the client
     must ensure these stay sane in case of any changes to one or the other. 
@@ -115,16 +121,21 @@ class GeoGraph(GeoObject, nx.Graph):
 
     """
 
-    def __init__(self, srs=gm.PROJ4_FLAT_EARTH, coords={}, data=None, **attr):
-        """ initialize via both parent classes """
+    def __init__(self, srs=gm.PROJ4_FLAT_EARTH, coords=None, data=None, **attr):
+        """ 
+        Initialize via both parent classes 
+        """
 
         GeoObject.__init__(self, srs, coords)
         nx.Graph.__init__(self, data, **attr)
 
         # handle case where coords have keys not referenced by edges
-        coord_keys = range(len(coords))
-        if isinstance(coords, dict):
-            coord_keys = coords.keys()
+        if self.coords is None:
+            self.coords = dict()
+
+        coord_keys = range(len(self.coords))
+        if isinstance(self.coords, dict):
+            coord_keys = self.coords.keys()
 
         new_nodes = set(coord_keys) - set(self.node.keys())
         self.add_nodes_from(new_nodes)
@@ -144,6 +155,43 @@ class GeoGraph(GeoObject, nx.Graph):
             "GeoGraph nodes and coords not aligned"
 
         return True
+
+    @staticmethod
+    def compose(left, right, force_distinct=False):
+        """
+        'override' of networkx compose to handle GeoGraph (really just coords)
+        """    
+        left_geo = left
+        right_geo = right
+
+        def coord_iter(geo_coords):
+            if isinstance(geo_coords, dict):
+                return geo_coords.iteritems()
+            else:
+                return enumerate(geo_coords)
+
+        def coord_map(old_coords, new_nodes):
+            assert len(old_coords) == len(new_nodes)
+            nodes = iter(new_nodes)
+            d = dict()
+            for k, coord in coord_iter(old_coords):
+                d[nodes.next()] = copy.copy(coord)
+            return d
+
+        if force_distinct:
+            left_geo = nx.convert_node_labels_to_integers(left_geo)
+            left_geo.coords = coord_map(left.coords, left_geo.nodes())
+            right_geo = nx.convert_node_labels_to_integers(right_geo, first_label=max(left_geo.nodes()))
+
+            right_geo.coords = coord_map(right.coords, right_geo.nodes())
+
+        geo = nx.compose(left_geo, right_geo)
+        coord_chain = chain(coord_iter(left_geo.coords), 
+                            coord_iter(right_geo.coords))
+
+        coords = {k: copy.copy(v) for k, v in coord_chain}
+        geo.coords = coords
+        return geo
 
     def project_onto(self, other, rtree_index=None, spherical_accuracy=False):
         """
@@ -201,6 +249,116 @@ class GeoGraph(GeoObject, nx.Graph):
             geo.coords[edge[1]] = self.coords[edge[1]]
 
         return geo
+
+    def _has_duplicate_coords(self, tolerance=gm.POINT_MATCH_TOLERANCE, 
+                              spatial_index=None):
+
+        if spatial_index is None:
+            spatial_index = KDTree(np.array(self.coords.values()))
+   
+        keys = self.coords.keys()
+
+        for i in range(len(keys)):
+            # Note:  i is the index of the node in the spatial_index
+            coord = self.coords[keys[i]]
+            gen = spatial_index.query_radius(np.array(coord), tolerance)
+            try:
+                for i in range(2):
+                    gen.next()
+
+            except StopIteration:
+                pass
+
+            # if there is more than 1, we have a duplicate
+            if i > 1:
+                return True
+            else:
+                return False
+    
+    def merge_nodes(self, u, v, node_data_map=None, self_loops=False):
+        """
+        merge nodes in-place
+        
+        ``u`` replaces ``v`` with attribute data defined by node_data_map
+        (default v attributes are merged into u)
+
+        would liked to have used [contracted_nodes](http://bit.ly/21n88s8)
+        but, it doesn't do in-place merge.  So this is mainly copied
+        """
+        if self.is_directed():
+            in_edges = ((w, u, d) for w, x, d in self.in_edges(v, data=True)
+                        if self_loops or w != u)
+            out_edges = ((u, w, d) for x, w, d in self.out_edges(v, data=True)
+                         if self_loops or w != u)
+            new_edges = chain(in_edges, out_edges)
+        else:
+            new_edges = ((u, w, d) for x, w, d in self.edges(v, data=True)
+                         if self_loops or w != u)
+
+        self.add_edges_from(new_edges)
+
+        # Need to do this after edges added (generators above are lazy)
+        v_data = self.node[v]
+        self.remove_node(v)
+        del self.coords[v]
+
+        if node_data_map is None:
+            def node_data_map(u_data, v_data):
+                result = {}
+                result.update(u_data)
+                result.update(v_data)
+                return result
+
+        self.node[u] = node_data_map(self.node[u], v_data)
+
+
+    def merge_nearby_nodes(self, radius=gm.POINT_MATCH_TOLERANCE, 
+                           node_data_map=None, edge_data_map=None):
+        """
+        merge 'nearby' nodes within radius of eachother
+
+        Note:  'nearby' is not necessarily an equivalence relation in
+        that transitivity does not hold...if a 'near' b and b 'near' c
+        a is NOT necessarily 'near' c, BUT they will be grouped.
+        So, a long chain of 'near' nodes could result in the furthest nodes
+        being really far apart.
+
+        See:  https://en.wikipedia.org/wiki/Equivalence_relation
+
+        TODO:  
+        handle node_data_map, edge_data_map functions to map attributes
+        from original nodes/edges to new nodes/edges
+
+        """
+
+        spatial_index = KDTree(np.array(self.coords.values()))
+        node_ids = self.coords.keys()
+
+        visited = set()
+        for node in self.nodes():
+            if node in visited:
+                continue
+
+            queue = deque()
+            def add_near_nodes_to_queue(node_id):
+                result = spatial_index.query_radius(np.array(self.coords[node_id]),
+                                                    radius)
+                near_nodes = [node_ids[idx_node[0]] for idx_node in result]
+                # only add non-merged nodes to queue
+                queue.extend(filter(lambda cur_node: cur_node not in visited, 
+                                    near_nodes))
+                # make sure we don't add them again
+                visited.update(near_nodes)
+
+            visited.add(node)
+            add_near_nodes_to_queue(node)
+
+            # keep 'matching' node ids in queue, appending as we find more
+            while len(queue) > 0:
+                other = queue.popleft()
+                add_near_nodes_to_queue(other)
+                self.merge_nodes(node, other)
+       
 
     def get_connected_weighted_graph(self):
         """

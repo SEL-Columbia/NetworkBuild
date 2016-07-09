@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import os
 import numpy as np
 import networkx as nx
 import networker.io as nio
@@ -168,13 +169,15 @@ def test_line_subgraph_intersection():
     Test case where precision and odd geometry issues occur
     """
     # initialize network, nodes
-    network = nio.load_shp("data/katsina/existing.shp", simplify=False)
+    existing_net_file = os.path.join("data", "katsina", "existing.shp")
+    demand_nodes_file = os.path.join("data", "katsina", "metrics.csv")
+    network = nio.read_shp_geograph(existing_net_file, simplify=False)
     network.coords = {"g-" + str(n): network.coords[n] for n in network.nodes()}
     new_labels = ["g-" + str(n) for n in network.nodes()]
     nx.relabel_nodes(network,
                      dict(zip(network.nodes(), new_labels)),
                      copy=False)
-    nodes = nio.load_nodes("data/katsina/metrics.csv", "x", "y")
+    nodes = nio.read_csv_geograph(demand_nodes_file, "x", "y")
 
     # populate disjoint set of subgraphs
     subgraphs = UnionFind()

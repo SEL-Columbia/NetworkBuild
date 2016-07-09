@@ -20,10 +20,10 @@ def networkplanner_run_compare(cfg, known_results_file, output_dir):
     nwk_p.run()
 
     # compare this run against existing results
-    test_geo = nio.load_shp(os.path.join(output_dir,
+    test_geo = nio.read_shp_geograph(os.path.join(output_dir,
                             "networks-proposed.shp"),
                             simplify=False)
-    known_geo = nio.load_shp(known_results_file, simplify=False)
+    known_geo = nio.read_shp_geograph(known_results_file, simplify=False)
 
     # compare sets of edges
     test_edges = get_rounded_edge_sets(test_geo, round_precision=8)
@@ -42,8 +42,8 @@ def test_networkplanner_run():
     """ test on randomly generated set of nodes (demand only) """
 
     run_config = "networkplanner_config_pop100.json"
-    results_file = "data/pop_100/networks-proposed.shp"
-    output_dir = "data/tmp"
+    results_file = os.path.join("data", "pop_100", "networks-proposed.shp")
+    output_dir = os.path.join("data", "tmp")
 
     cfg = get_config(run_config)
 
@@ -54,8 +54,8 @@ def test_networkplanner_leona_run():
     """ test on randomly generated set of nodes (demand only) """
 
     run_config = "networkplanner_config_leona_net.json"
-    results_file = "data/leona/expected/networks-proposed.shp"
-    output_dir = "data/tmp"
+    results_file = os.path.join("data", "leona", "expected", "networks-proposed.shp")
+    output_dir = os.path.join("data", "tmp")
 
     cfg = get_config(run_config)
 
@@ -67,8 +67,8 @@ def test_dataset_store_to_geograph():
     """
     make sure we can go from shp to geograph to dataset_store
     """
-    data_dir = "data/pop_100"
-    test_geo = nio.load_shp(os.path.join(data_dir,
+    data_dir = os.path.join("data", "pop_100")
+    test_geo = nio.read_shp_geograph(os.path.join(data_dir,
                             "networks-proposed.shp"),
                             simplify=False)
     dataset = dataset_store.load(os.path.join(data_dir, "dataset.db"))

@@ -22,7 +22,7 @@ parser.add_argument("--output_directory", "-o", \
 
 args = parser.parse_args()
 
-net = nio.load_shp(args.network_filename, simplify=False)
+net = nio.read_shp_geograph(args.network_filename, simplify=False)
 
 num_found = 0
 for zero_len_edge in net.find_zero_len_edges():

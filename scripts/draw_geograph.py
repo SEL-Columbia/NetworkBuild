@@ -18,9 +18,9 @@ args = parser.parse_args()
 nets = []
 for net_file in args.network_files:
     if len(net_file) > 5 and net_file[-5:] == '.json':
-        nets.append(nio.load_json(open(net_file, 'r')))
+        nets.append(nio.read_json_geograph(net_file))
     else:
-        nets.append(nio.load_shp(net_file, simplify=False))
+        nets.append(nio.read_shp_geograph(net_file, simplify=False))
 
 # do the rendering and save to file
 import matplotlib

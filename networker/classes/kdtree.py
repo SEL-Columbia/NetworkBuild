@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from numba import jit
+from collections import deque
+
 
 
 @jit
@@ -91,6 +93,22 @@ class KDTree(object):
         orth_point[alt_axes] = self.node[alt_axes]
         return distance(orth_point, self.node)
 
+    def breadth_first_trees(self):
+        """ generate all sub-trees in bf order from self """
+        if self.node is None:
+            return
+
+        queue = deque()
+        queue.append(self)
+        while len(queue) > 0:
+            kdt = queue.popleft()
+            yield kdt
+            if kdt.left.node is not None:
+                queue.append(kdt.left)
+            if kdt.right.node is not None:
+                queue.append(kdt.right)
+
+        
     def query(self, point, best=None):
         """Find the nearest neighbor of point in KDTree"""
 
@@ -113,6 +131,28 @@ class KDTree(object):
         if self.orthogonal_dist(point) < distance(best[1], point):
             best = self.far_branch(point).query(point, best)
         return best
+
+    def query_radius(self, point, radius):
+        """Find the nodes within radius of point"""
+
+        if self.node is None:
+            return
+
+        # check if current node is within radius
+        # Note:  distance is square distance
+        if distance(self.node, point) <= radius**2:
+            yield (self.idx, self.node)
+
+        # continue traversing the tree
+        # TODO:  upgrade to python3 so we can use the cleaner 'yield from'
+        for kdt in self.near_branch(point).query_radius(point, radius):
+            yield kdt
+            
+        # traverse the away branch if the orthogonal distance <= radius
+        if self.orthogonal_dist(point) <= radius:
+            for kdt in self.far_branch(point).query_radius(point, radius):
+                yield kdt
+
 
     def query_subset(self, point, subset):
         """Find the nearest neighbor of point in subset"""

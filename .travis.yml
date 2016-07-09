@@ -13,20 +13,16 @@ install:
   - conda info -a
   # setup networker in conda environment 
   - conda create -n networker python=2.7
-  - conda config --add channels 'ioos'
-  - conda install --yes -c sel -n networker networkplanner-metrics
-  - conda install --yes -c sel -n networker networker
   # setup coverage tools
   - conda install --yes -n networker coverage
-  - conda install --yes -n networker coveralls
+  - conda install --yes -n networker -c conda-forge python-coveralls
 before_script:
   # cache the lib dir and activate the conda environment
   # - ldconfig "$HOME/miniconda/envs/networker/lib"
   - source activate networker
+  - conda install --yes -c conda-forge --file requirements.txt
+  - conda install --yes -c conda-forge -c sel networkplanner-metrics
   - find -name '*.py' | xargs sed -i 's/@jit/# @jit/'
 script:
   - nosetests --with-coverage
 after_success: coveralls
- 
-notifications:
-  irc: "irc.freenode.org#sel-columbia"
