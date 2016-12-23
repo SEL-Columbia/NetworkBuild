@@ -12,4 +12,4 @@ rtree
 jsonschema
 pyproj
 six
-gdal
+# gdal
